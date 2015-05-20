@@ -23,6 +23,12 @@ module.exports = React.createClass({
      */
     onAdd: React.PropTypes.func,
 
+    /**
+     * Called when a new mention is about to be added and offers
+     * ability for suggestion modification before it's added.
+     */
+    onBeforeAdd: React.PropTypes.func,
+
     renderSuggestion: React.PropTypes.func,
 
   },
@@ -31,6 +37,7 @@ module.exports = React.createClass({
     return {
       trigger: "@",
       onAdd: emptyFunction,
+      onBeforeAdd: emptyFunction,
       onRemove: emptyFunction,
       renderSuggestion: null
     };
