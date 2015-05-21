@@ -364,6 +364,10 @@ module.exports = React.createClass({
     this._suggestionsMouseDown = true;
   },
 
+  focusTextarea: function() {
+    this.refs.input.getDOMNode().focus();
+  },
+
   autogrowTextarea: function() {
     var el = this.refs.input.getDOMNode();
     el.style.height = "auto";
@@ -522,7 +526,6 @@ module.exports = React.createClass({
     //pass the selected mention up to the onBeforeAdd function if provided
     if(onBeforeAdd) {
       //get the type offset
-      this.refs.input.getDOMNode().focus();
       var caretEl = this.refs.caret.getDOMNode();
       var highligherEl = this.refs.highlighter.getDOMNode();
       var leftOffset = caretEl.offsetLeft - highligherEl.scrollLeft + "px";
