@@ -48,7 +48,7 @@ var _getDataProvider = function(data) {
   }
 };
 
-var KEY = { TAB : 9, RETURN : 13, ESC : 27, UP : 38, DOWN : 40 };
+var KEY = { TAB : 9, RETURN : 13, ESC : 27, UP : 38, DOWN : 40, SPACE : 32 };
 
 
 module.exports = React.createClass({
@@ -324,7 +324,14 @@ module.exports = React.createClass({
       }
     }
 
+    
     var suggestionsComp = this.refs.suggestions;
+    //only one option and user presses space
+    if( suggestionsCount === 1 && suggestionsComp) {
+      console.log("ONE LEFT");
+      keyHandlers[KEY.SPACE] = suggestionsComp.selectFocused;
+    }
+    
     if(suggestionsCount > 0 && suggestionsComp) {
       keyHandlers[KEY.ESC] = this.clearSuggestions;
       keyHandlers[KEY.DOWN] = suggestionsComp.shiftFocus.bind(null, +1);
