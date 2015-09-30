@@ -326,12 +326,11 @@ module.exports = React.createClass({
 
     
     var suggestionsComp = this.refs.suggestions;
-    //only one option and user presses space
-    if( suggestionsCount === 1 && suggestionsComp) {
-      console.log("ONE LEFT");
+    //only one option (plus the add new user) and user presses space
+    if( suggestionsCount === 2 && suggestionsComp) {
       keyHandlers[KEY.SPACE] = suggestionsComp.selectFocused;
     }
-    
+        
     if(suggestionsCount > 0 && suggestionsComp) {
       keyHandlers[KEY.ESC] = this.clearSuggestions;
       keyHandlers[KEY.DOWN] = suggestionsComp.shiftFocus.bind(null, +1);
