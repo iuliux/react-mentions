@@ -157,9 +157,12 @@ module.exports = {
 
   // For the passed character index in the plain text string, returns the corresponding index
   // in the marked up value string.
-  // If the passed character index lies inside a mention, returns the index of the mention 
-  // markup's first char, or respectively tho one after its last char, if the flag `toEndOfMarkup` is set.
-  mapPlainTextIndex: function(value, markup, indexInPlainText, toEndOfMarkup, displayTransform) {
+  // If the passed character index lies inside a mention, the value of `inMarkupCorrection` defines the
+  // correction to apply:
+  //   - 'START' to return the index of the mention markup's first char
+  //   - 'END' to return the index after its last char
+  //   - false to not apply any correction
+  mapPlainTextIndex: function(value, markup, indexInPlainText, inMarkupCorrection='START', displayTransform) {
     if(!this.isNumber(indexInPlainText)) {
       return indexInPlainText;
     }
@@ -168,7 +171,7 @@ module.exports = {
     var textIteratee = function(substr, index, substrPlainTextIndex) {
       if(result !== undefined) return;
 
-      if(substrPlainTextIndex + substr.length >= indexInPlainText) {
+      if( substrPlainTextIndex + substr.length >= indexInPlainText) {
         // found the corresponding position in the current plain text range
         result = index + indexInPlainText - substrPlainTextIndex;
       }
@@ -197,8 +200,8 @@ module.exports = {
   findStartOfMentionInPlainText: function(value, markup, indexInPlainText, displayTransform) {
     var result = indexInPlainText;
     var markupIteratee = function(markup, index, mentionPlainTextIndex, id, display, type, lastMentionEndIndex) {
-      if(mentionPlainTextIndex < indexInPlainText && mentionPlainTextIndex + display.length > indexInPlainText) {
-        result = mentionPlainTextIndex;
+      if(inMarkupCorrection &&  mentionPlainTextIndex < indexInPlainText && mentionPlainTextIndex + display.length > indexInPlainText) {
+        result = index + (inMarkupCorrection === 'END' ? markup.length : 0);
       }
     };
     this.iterateMentionsMarkup(value, markup, function(){}, markupIteratee, displayTransform);
@@ -227,13 +230,39 @@ module.exports = {
       spliceEnd = Math.max(selectionEndBeforeChange, selectionStartBeforeChange + lengthDelta);
     }
     
-    // splice the current marked up value and insert new chars
-    return this.spliceString(
-      value,
-      this.mapPlainTextIndex(value, markup, spliceStart, false, displayTransform),
-      this.mapPlainTextIndex(value, markup, spliceEnd, true, displayTransform),
-      insert
-    );
+    var mappedSpliceStart = this.mapPlainTextIndex(value, markup, spliceStart, 'START', displayTransform);
+    var controlSpliceStart = this.mapPlainTextIndex(value, markup, spliceStart, false, displayTransform);
+    var mappedSpliceEnd = this.mapPlainTextIndex(value, markup, spliceEnd, 'END', displayTransform);
+    var controlSpliceEnd = this.mapPlainTextIndex(value, markup, spliceEnd, false, displayTransform);
+    var willRemoveMention = mappedSpliceStart !== controlSpliceStart || mappedSpliceEnd !== controlSpliceEnd;
+
+    var newValue = this.spliceString(value, mappedSpliceStart, mappedSpliceEnd, insert);
+
+    if(!willRemoveMention) {
+      // test for auto-completion changes
+      var controlPlainTextValue = this.getPlainText(newValue, markup, displayTransform);
+      if(controlPlainTextValue !== plainTextValue) {
+        // some auto-correction is going on
+
+        // find start of diff
+        spliceStart = 0;
+        while(plainTextValue[spliceStart] === controlPlainTextValue[spliceStart])
+          spliceStart++
+
+        // extract auto-corrected insertion
+        insert = plainTextValue.slice(spliceStart, selectionEndAfterChange)
+
+        // find index of the unchanged remainder
+        spliceEnd = oldPlainTextValue.lastIndexOf(plainTextValue.substring(selectionEndAfterChange))
+
+        // re-map the corrected indices
+        mappedSpliceStart = this.mapPlainTextIndex(value, markup, spliceStart, 'START', displayTransform);
+        mappedSpliceEnd = this.mapPlainTextIndex(value, markup, spliceEnd, 'END', displayTransform);
+        newValue = this.spliceString(value, mappedSpliceStart, mappedSpliceEnd, insert);
+      }
+    }
+    
+    return newValue;
   },
 
   getPlainText: function(value, markup, displayTransform) {
