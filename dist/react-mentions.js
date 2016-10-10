@@ -919,7 +919,7 @@ module.exports = {
   //   - 'END' to return the index after its last char
   //   - false to not apply any correction
   mapPlainTextIndex: function(value, markup, indexInPlainText, inMarkupCorrection, displayTransform) {
-    inMarkupCorrection='START';
+    typeof inMarkupCorrection !== 'undefined' ? inMarkupCorrection : 'START';
     if(!this.isNumber(indexInPlainText)) {
       return indexInPlainText;
     }
