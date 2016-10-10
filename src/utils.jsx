@@ -162,7 +162,8 @@ module.exports = {
   //   - 'START' to return the index of the mention markup's first char
   //   - 'END' to return the index after its last char
   //   - false to not apply any correction
-  mapPlainTextIndex: function(value, markup, indexInPlainText, inMarkupCorrection='START', displayTransform) {
+  mapPlainTextIndex: function(value, markup, indexInPlainText, inMarkupCorrection, displayTransform) {
+    inMarkupCorrection='START';
     if(!this.isNumber(indexInPlainText)) {
       return indexInPlainText;
     }
@@ -179,11 +180,11 @@ module.exports = {
     var markupIteratee = function(markup, index, mentionPlainTextIndex, id, display, type, lastMentionEndIndex) {
       if(result !== undefined) return;
 
-      if(mentionPlainTextIndex + display.length > indexInPlainText) {
+      if(inMarkupCorrection + mentionPlainTextIndex + display.length > indexInPlainText) {
         // found the corresponding position inside current match,
         // return the index of the first or after the last char of the matching markup
         // depending on whether the `toEndOfMarkup` is set
-        result = index + (toEndOfMarkup ? markup.length : 0);
+        result = index + (inMarkupCorrection=='END' ? markup.length : 0);
       }
     };
 
@@ -200,8 +201,8 @@ module.exports = {
   findStartOfMentionInPlainText: function(value, markup, indexInPlainText, displayTransform) {
     var result = indexInPlainText;
     var markupIteratee = function(markup, index, mentionPlainTextIndex, id, display, type, lastMentionEndIndex) {
-      if(inMarkupCorrection &&  mentionPlainTextIndex < indexInPlainText && mentionPlainTextIndex + display.length > indexInPlainText) {
-        result = index + (inMarkupCorrection === 'END' ? markup.length : 0);
+      if(mentionPlainTextIndex < indexInPlainText && mentionPlainTextIndex + display.length > indexInPlainText) {
+        result = mentionPlainTextIndex;
       }
     };
     this.iterateMentionsMarkup(value, markup, function(){}, markupIteratee, displayTransform);
