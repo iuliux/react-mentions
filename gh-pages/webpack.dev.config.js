@@ -1,8 +1,7 @@
 var webpack = require('webpack');
 
 module.exports = {
-  entry: './',
-  devtool: 'source-map',
+  entry: './index.js',
   output: {
     filename: 'bundle.js',
   },
@@ -10,13 +9,6 @@ module.exports = {
     extensions: ['', '.js', '.less', '.css']
   },
   plugins: [
-    new webpack.optimize.UglifyJsPlugin({ output: {comments: false} }),
-    new webpack.DefinePlugin({
-      "process.env": {
-        // This has effect on the react lib size
-        "NODE_ENV": JSON.stringify("production")
-      }
-    }),
     new webpack.NormalModuleReplacementPlugin( // allow examples to include react-mentions
       /^react-mentions$/,
       __dirname + '/../src'
@@ -24,7 +16,25 @@ module.exports = {
   ],
   module: {
     loaders: [
-      { test: /\.js$/, loader: 'babel', exclude: /node_modules/ },
+      { 
+        test: /\.js$/, 
+        loader: 'babel', 
+        exclude: /node_modules/,
+        query: {
+          "plugins": [
+            ["react-transform", {
+              "transforms": [{
+                "transform": "react-transform-hmr",
+                "imports": ["react"],
+                "locals": ["module"]
+              }, {
+                "transform": "react-transform-catch-errors",
+                "imports": ["react", "redbox-react"]
+              }]
+            }]
+          ]
+        }
+      },
       { test: /\.css$/, loader: 'style-loader!css-loader' },
       {
         test: /\.less$/,

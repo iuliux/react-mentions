@@ -1,7 +1,6 @@
 var React = require("react");
-var Router = require("react-router");
-var routes = require("./routes");
+var ReactDOM = require("react-dom");
+var Application = require("./views/Application");
+require("./less/react-mentions.less");
 
-Router.run(routes, Router.HashLocation, function(Handler) {
-    React.render(React.createElement(Handler, null), document.body);
-});
+ReactDOM.render(React.createElement(Application, null), document.getElementById('app'));

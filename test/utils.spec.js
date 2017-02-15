@@ -4,7 +4,7 @@ var sinonChai = require("sinon-chai");
 var expect = chai.expect;
 chai.use(sinonChai);
 
-var utils = require('../lib/utils');
+var utils = require('../src/utils');
 
 
 describe("utils", function() {
@@ -34,6 +34,7 @@ describe("utils", function() {
     var testData = {
       "@[__display__](__id__)" : { display: 0, id: 1, type: null },
       "@[__display__](__type__:__id__)" : { display: 0, id: 2, type: 1 },
+      "@(__type__:__id__)" : { display: 1, id: 1, type: 0 },
       "{{__id__#__display__}}" : { display: 1, id: 0, type: null },
       "{{__id__}}" : { display: 0, id: 0, type: null },
       "{{__display__}}" : { display: 0, id: 0, type: null }
@@ -45,23 +46,23 @@ describe("utils", function() {
       (function() {
         var markup = key;
         var positions = testData[key];
-  
+
         it("should return " + positions.display + " for the `display` position in markup `" + markup + "`", function() {
           expect(utils.getPositionOfCapturingGroup(markup, "display")).to.equal(positions.display);
         });
-  
+
         it("should return " + positions.id + " for the `id` position in markup `" + markup + "`", function() {
           expect(utils.getPositionOfCapturingGroup(markup, "id")).to.equal(positions.id);
         });
-  
+
         it("should return " + positions.type + " for the `type` position in markup `" + markup + "`", function() {
           expect(utils.getPositionOfCapturingGroup(markup, "type")).to.equal(positions.type);
         });
-      
+
 
       })();
     }
-      
+
   });
 
   describe("#iterateMentionsMarkup", function() {
@@ -93,7 +94,7 @@ describe("utils", function() {
 
       expect(textIteratee).to.have.been.calledThrice;
       expect(textIteratee).to.have.been.calledWith(
-        "Hi ", 
+        "Hi ",
         0,
         0
       );
@@ -136,7 +137,7 @@ describe("utils", function() {
 
       expect(textIteratee).to.have.been.calledThrice;
       expect(textIteratee).to.have.been.calledWith(
-        "Hi ", 
+        "Hi ",
         0,
         0
       );
@@ -164,7 +165,7 @@ describe("utils", function() {
 
     it("should correctly calculate the index of a character in the plain text between mentions with display tranform", function() {
       var plainTextIndex = plainTextDisplayTransform.indexOf("let's add");
-      var result = utils.mapPlainTextIndex(value, defaultMarkup, plainTextIndex, false, displayTransform);
+      var result = utils.mapPlainTextIndex(value, defaultMarkup, plainTextIndex, 'START', displayTransform);
       expect(result).to.equal(value.indexOf("let's add"));
     });
 
@@ -208,36 +209,44 @@ describe("utils", function() {
       expect(result).to.equal(value.indexOf(joeMarkup));
     });
 
-    it("should return the index of the corresponding markup's last character if the plain text index lies inside a mention and the `toEndOfMarkup` flag is set", function() {
+    it("should return the index of the corresponding markup's last character if the plain text index lies inside a mention and the `inMarkupCorrection` is set to 'END'", function() {
       // index for first char of markup
       var plainTextIndex = plainText.indexOf("John Doe");
-      var result = utils.mapPlainTextIndex(value, defaultMarkup, plainTextIndex, true);
+      var result = utils.mapPlainTextIndex(value, defaultMarkup, plainTextIndex, 'END');
       expect(result).to.equal(value.indexOf("@[John Doe](user:johndoe)"));
 
       // index of char inside the markup
       var joeMarkup = "@[joe@smoe.com](email:joe@smoe.com)";
       plainTextIndex = plainText.indexOf("joe@smoe.com") + 3;
-      result = utils.mapPlainTextIndex(value, defaultMarkup, plainTextIndex, true);
+      result = utils.mapPlainTextIndex(value, defaultMarkup, plainTextIndex, 'END');
       expect(result).to.equal(value.indexOf(joeMarkup) + joeMarkup.length);
 
       // index of markup's last char
       plainTextIndex = plainText.indexOf("joe@smoe.com") + "joe@smoe.com".length - 1;
-      result = utils.mapPlainTextIndex(value, defaultMarkup, plainTextIndex, true);
+      result = utils.mapPlainTextIndex(value, defaultMarkup, plainTextIndex, 'END');
       expect(result).to.equal(value.indexOf(joeMarkup) + joeMarkup.length);
+    });
+
+    it("should return `null` if `inMarkupCorrection` is set to 'NULL'", function() {
+      // index of char inside the markup
+      var joeMarkup = "@[joe@smoe.com](email:joe@smoe.com)";
+      var plainTextIndex = plainText.indexOf("joe@smoe.com") + 3;
+      var result = utils.mapPlainTextIndex(value, defaultMarkup, plainTextIndex, 'NULL');
+      expect(result).to.equal(null);
     });
 
     it("should return the index of the corresponding markup's first character if the plain text index lies inside a mention with display transform", function() {
       // index of char inside the markup
       var joeMarkup = "@[joe@smoe.com](email:joe@smoe.com)";
-      plainTextIndex = plainTextDisplayTransform.indexOf("joe@smoe.com") + 3;
-      result = utils.mapPlainTextIndex(value, defaultMarkup, plainTextIndex);
+      var plainTextIndex = plainTextDisplayTransform.indexOf("joe@smoe.com") + 3;
+      var result = utils.mapPlainTextIndex(value, defaultMarkup, plainTextIndex);
       expect(result).to.equal(value.indexOf(joeMarkup));
     });
 
     it("should return the correctly mapped caret position at the end of the string after a mention", function() {
       var value = "Hi @[John Doe](user:johndoe)";
       var plainText = "Hi John Doe";
-      var result = utils.mapPlainTextIndex(value, defaultMarkup, plainText.length, true);
+      var result = utils.mapPlainTextIndex(value, defaultMarkup, plainText.length, 'END');
       expect(result).to.equal(value.length);
     });
 
@@ -250,9 +259,14 @@ describe("utils", function() {
       expect(result).to.equal(plainText.indexOf("John Doe"));
     });
 
-    it("should return the passed index, if it does not lie inside a mention", function() {
+    it("should return `undefined`, if it does not lie inside a mention", function() {
       var result = utils.findStartOfMentionInPlainText(value, defaultMarkup, plainText.indexOf("add"));
-      expect(result).to.equal(plainText.indexOf("add"));
+      expect(result).to.equal(undefined);
+    });
+
+    it("should return the index of the mention's first char if that one is the probe value", function() {
+      var result = utils.findStartOfMentionInPlainText(value, defaultMarkup, plainText.indexOf("John"));
+      expect(result).to.equal(plainText.indexOf("John"));
     });
 
   });
@@ -302,7 +316,7 @@ describe("utils", function() {
       var changed = "Hi John Do, \n\nlet's add joe@smoe.com to this conversation...";
       var result = utils.applyChangeToValue(value, defaultMarkup, changed, 11, 11, 10);
       expect(result).to.equal("Hi , \n\nlet's add @[joe@smoe.com](email:joe@smoe.com) to this conversation...");
-    
+
       // delete mention inside the range
       changed = "Hi let's add joe@smoe.com to this conversation...";
       result = utils.applyChangeToValue(value, defaultMarkup, changed, 3, 15, 3);
@@ -341,6 +355,23 @@ describe("utils", function() {
       var result = utils.applyChangeToValue(value, defaultMarkup, changed, 26, 26, 26, displayTransform);
       expect(result).to.equal("Hi @[John Doe](user:johndoe), \n\nlet's dd @[joe@smoe.com](email:joe@smoe.com) to this conversation...");
     });
+
+    it('should correctly handle text auto-correction', function () {
+      var result = utils.applyChangeToValue("ill", defaultMarkup, "I'll", 3, 3, 4);
+      expect(result).to.equal("I'll")
+    });
+
+  });
+
+  describe('#getMentions', function () {
+
+    it('should return an array of all mentions in the provided value', function () {
+      var mentions = utils.getMentions(value, defaultMarkup);
+      expect(mentions).to.deep.equal([
+        { id: "johndoe", display: "John Doe", type: "user", index: 3, plainTextIndex: 3 },
+        { id: "joe@smoe.com", display: "joe@smoe.com", type: "email", index: 42, plainTextIndex: 25 }
+      ]);
+    })
 
   });
 

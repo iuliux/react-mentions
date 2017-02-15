@@ -48,7 +48,7 @@ module.exports = {
     markupPattern = markupPattern.replace(PLACEHOLDERS.display, "(.+?)");
     markupPattern = markupPattern.replace(PLACEHOLDERS.id, "(.+?)");
     markupPattern = markupPattern.replace(PLACEHOLDERS.type, "(.+?)");
-    if(matchAtEnd) { 
+    if(matchAtEnd) {
       // append a $ to match at the end of the string
       markupPattern = markupPattern + "$";
     }
@@ -101,13 +101,13 @@ module.exports = {
 
     if(indexType === null && parameterName === "type") {
       // markup does not contain optional __type__ placeholder
-      return null; 
+      return null;
     }
 
     // sort indices in ascending order (null values will always be at the end)
     var sortedIndices = [indexDisplay, indexId, indexType].sort(numericComparator);
 
-    // If only one the placeholders __id__ and __display__ is present, 
+    // If only one the placeholders __id__ and __display__ is present,
     // use the captured string for both parameters, id and display
     if(indexDisplay === null) indexDisplay = indexId;
     if(indexId === null) indexId = indexDisplay;
@@ -136,7 +136,7 @@ module.exports = {
 
       var id = match[idPos+1];
       var display = match[displayPos+1];
-      var type = typePos ? match[typePos+1] : null;
+      var type = typePos !== null ? match[typePos+1] : null;
 
       if(displayTransform) display = displayTransform(id, display, type);
 
@@ -157,9 +157,12 @@ module.exports = {
 
   // For the passed character index in the plain text string, returns the corresponding index
   // in the marked up value string.
-  // If the passed character index lies inside a mention, returns the index of the mention 
-  // markup's first char, or respectively tho one after its last char, if the flag `toEndOfMarkup` is set.
-  mapPlainTextIndex: function(value, markup, indexInPlainText, toEndOfMarkup, displayTransform) {
+  // If the passed character index lies inside a mention, the value of `inMarkupCorrection` defines the
+  // correction to apply:
+  //   - 'START' to return the index of the mention markup's first char (default)
+  //   - 'END' to return the index after its last char
+  //   - 'NULL' to return null
+  mapPlainTextIndex: function(value, markup, indexInPlainText, inMarkupCorrection='START', displayTransform) {
     if(!this.isNumber(indexInPlainText)) {
       return indexInPlainText;
     }
@@ -179,8 +182,12 @@ module.exports = {
       if(mentionPlainTextIndex + display.length > indexInPlainText) {
         // found the corresponding position inside current match,
         // return the index of the first or after the last char of the matching markup
-        // depending on whether the `toEndOfMarkup` is set
-        result = index + (toEndOfMarkup ? markup.length : 0);
+        // depending on whether the `inMarkupCorrection`
+        if(inMarkupCorrection === 'NULL') {
+          result = null;
+        } else {
+          result = index + (inMarkupCorrection === 'END' ? markup.length : 0);
+        }
       }
     };
 
@@ -196,23 +203,49 @@ module.exports = {
   // If indexInPlainText does not lie inside a mention, returns indexInPlainText.
   findStartOfMentionInPlainText: function(value, markup, indexInPlainText, displayTransform) {
     var result = indexInPlainText;
+    var foundMention = false;
+
     var markupIteratee = function(markup, index, mentionPlainTextIndex, id, display, type, lastMentionEndIndex) {
-      if(mentionPlainTextIndex < indexInPlainText && mentionPlainTextIndex + display.length > indexInPlainText) {
+      if(mentionPlainTextIndex <= indexInPlainText && mentionPlainTextIndex + display.length > indexInPlainText) {
         result = mentionPlainTextIndex;
+        foundMention = true;
       }
     };
     this.iterateMentionsMarkup(value, markup, function(){}, markupIteratee, displayTransform);
-    return result;
+
+    if (foundMention) {
+      return result;
+    }
   },
 
   // Returns whether the given plain text index lies inside a mention
   isInsideOfMention: function(value, markup, indexInPlainText, displayTransform) {
-    return this.findStartOfMentionInPlainText(value, markup, indexInPlainText, displayTransform) !== indexInPlainText;
+    var mentionStart = this.findStartOfMentionInPlainText(value, markup, indexInPlainText, displayTransform);
+    return mentionStart !== undefined && mentionStart !== indexInPlainText
   },
-
+  
   // Applies a change from the plain text textarea to the underlying marked up value
-  // guided by the textarea text selection ranges before and after the change 
+  // guided by the textarea text selection ranges before and after the change
   applyChangeToValue: function(value, markup, plainTextValue, selectionStartBeforeChange, selectionEndBeforeChange, selectionEndAfterChange, displayTransform) {
+    var oldPlainTextValue = this.getPlainText(value, markup, displayTransform);
+
+    var lengthDelta = oldPlainTextValue.length - plainTextValue.length;
+    if (selectionStartBeforeChange === 'undefined') {
+      selectionStartBeforeChange = selectionEndAfterChange + lengthDelta;
+    }
+
+    if (selectionEndBeforeChange === 'undefined') {
+      selectionEndBeforeChange = selectionStartBeforeChange;
+    }
+
+    // Fixes an issue with replacing combined characters for complex input. Eg like acented letters on OSX
+    if (selectionStartBeforeChange === selectionEndBeforeChange &&
+      selectionEndBeforeChange === selectionEndAfterChange &&
+      oldPlainTextValue.length === plainTextValue.length
+    ) {
+      selectionStartBeforeChange = selectionStartBeforeChange - 1;
+    }
+
     // extract the insertion from the new plain text value
     var insert = plainTextValue.slice(selectionStartBeforeChange, selectionEndAfterChange);
 
@@ -221,19 +254,44 @@ module.exports = {
 
     var spliceEnd = selectionEndBeforeChange;
     if(selectionStartBeforeChange === selectionEndAfterChange) {
-      var oldPlainTextValue = this.getPlainText(value, markup, displayTransform);
-      var lengthDelta = oldPlainTextValue.length - plainTextValue.length;
       // handling for Delete key with no range selection
       spliceEnd = Math.max(selectionEndBeforeChange, selectionStartBeforeChange + lengthDelta);
     }
+
+    var mappedSpliceStart = this.mapPlainTextIndex(value, markup, spliceStart, 'START', displayTransform);
+    var mappedSpliceEnd = this.mapPlainTextIndex(value, markup, spliceEnd, 'END', displayTransform);
+
+    var controlSpliceStart = this.mapPlainTextIndex(value, markup, spliceStart, 'NULL', displayTransform);
+    var controlSpliceEnd = this.mapPlainTextIndex(value, markup, spliceEnd, 'NULL', displayTransform);
+    var willRemoveMention = controlSpliceStart === null || controlSpliceEnd === null;
+
+    var newValue = this.spliceString(value, mappedSpliceStart, mappedSpliceEnd, insert);
+
+    if(!willRemoveMention) {
+      // test for auto-completion changes
+      var controlPlainTextValue = this.getPlainText(newValue, markup, displayTransform);
+      if(controlPlainTextValue !== plainTextValue) {
+        // some auto-correction is going on
+
+        // find start of diff
+        spliceStart = 0;
+        while(plainTextValue[spliceStart] === controlPlainTextValue[spliceStart])
+          spliceStart++
+
+        // extract auto-corrected insertion
+        insert = plainTextValue.slice(spliceStart, selectionEndAfterChange)
+
+        // find index of the unchanged remainder
+        spliceEnd = oldPlainTextValue.lastIndexOf(plainTextValue.substring(selectionEndAfterChange))
+
+        // re-map the corrected indices
+        mappedSpliceStart = this.mapPlainTextIndex(value, markup, spliceStart, 'START', displayTransform);
+        mappedSpliceEnd = this.mapPlainTextIndex(value, markup, spliceEnd, 'END', displayTransform);
+        newValue = this.spliceString(value, mappedSpliceStart, mappedSpliceEnd, insert);
+      }
+    }
     
-    // splice the current marked up value and insert new chars
-    return this.spliceString(
-      value,
-      this.mapPlainTextIndex(value, markup, spliceStart, false, displayTransform),
-      this.mapPlainTextIndex(value, markup, spliceEnd, true, displayTransform),
-      insert
-    );
+    return newValue;
   },
 
   getPlainText: function(value, markup, displayTransform) {
@@ -251,11 +309,63 @@ module.exports = {
     });
   },
 
+  getMentions: function (value, markup) {
+    var mentions = [];
+    this.iterateMentionsMarkup(value, markup, function (){}, function (match, index, plainTextIndex, id, display, type, start) {
+      mentions.push({
+        id: id,
+        display: display,
+        type: type,
+        index: index,
+        plainTextIndex: plainTextIndex
+      });
+    });
+    return mentions;
+  },
+
   makeMentionsMarkup: function(markup, id, display, type) {
     var result = markup.replace(PLACEHOLDERS.id, id);
     result = result.replace(PLACEHOLDERS.display, display);
     result = result.replace(PLACEHOLDERS.type, type);
     return result;
+  },
+
+  countSuggestions: function(suggestions) {
+    let result = 0;
+    for(let prop in suggestions) {
+      if(suggestions.hasOwnProperty(prop)) {
+        result += suggestions[prop].results.length;
+      }
+    }
+    return result;
+  },
+
+  getSuggestions: function(suggestions) {
+    var result = [];
+
+    for(var mentionType in suggestions) {
+      if(!suggestions.hasOwnProperty(mentionType)) {
+        return;
+      }
+
+      result = result.concat({
+        suggestions: suggestions[mentionType].results,
+        descriptor: suggestions[mentionType]
+      });
+    }
+
+    return result;
+  },
+
+  getSuggestion: function(suggestions, index) {
+    return this.getSuggestions(suggestions).reduce((result, { suggestions, descriptor }) => [
+      ...result,
+
+      ...suggestions.map((suggestion) => ({
+        suggestion: suggestion,
+        descriptor: descriptor
+      }))
+    ], [])[index];
   }
 
 }
