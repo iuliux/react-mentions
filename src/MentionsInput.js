@@ -59,7 +59,7 @@ const MentionsInput = React.createClass({
      * instead of a textarea
      */
     singleLine: PropTypes.bool,
-
+    limit: PropTypes.number,
     markup: PropTypes.string,
     value: PropTypes.string,
 
@@ -79,6 +79,7 @@ const MentionsInput = React.createClass({
     return {
       markup: "@[__display__](__id__)",
       singleLine: false,
+      limit: 1300,
       displayTransform: function(id, display, type) {
         return display;
       },
@@ -156,6 +157,7 @@ const MentionsInput = React.createClass({
       <input
         type="text"
         ref="input"
+
         { ...props } />
     );
   },
@@ -164,6 +166,7 @@ const MentionsInput = React.createClass({
     return (
       <textarea
         ref="input"
+        maxLength={this.props.limit}
         { ...props } />
     );
   },
